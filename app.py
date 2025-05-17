@@ -182,9 +182,16 @@ if uploaded_file is not None:
     results = model(orig_image)
     results.render()
 
-    result_np = results.ims[0]
-    result_rgb = cv2.cvtColor(result_np, cv2.COLOR_BGR2RGB)
-    result_img = Image.fromarray(result_rgb)
+    # 1. YOLO 결과 이미지 (BGR)
+    bgr_image = results.ims[0]  # numpy.ndarray (BGR)
+
+    # 2. BGR → RGB 변환
+    rgb_image = cv2.cvtColor(bgr_image, cv2.COLOR_BGR2RGB)
+
+    # 3. PIL 이미지로 변환
+    result_img = Image.fromarray(rgb_image)
+
+    # 4. Streamlit에 표시
     st.image(result_img, caption="AI 탐지 결과", use_column_width=True)
 
     df = results.pandas().xyxy[0]
