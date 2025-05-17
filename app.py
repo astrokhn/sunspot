@@ -1,6 +1,9 @@
-# Streamlit 앱: YOLOv5로 태양 흑점 탐지 + 날씨/온도/습도/관측 장소 기록 + Notion 업로드
+# Streamlit 앱: YOLOv5로 태양 흑점 탐지 + 날씨/온도/습도/관측 장소 기록 + + Imgur 이미지 업로드 + Notion 업로드
 
 import streamlit as st
+
+st.set_page_config(page_title="태양 흑점 AI 탐지기", layout="centered")
+
 import torch
 from PIL import Image
 import numpy as np
@@ -133,7 +136,6 @@ def load_model():
 
 model = load_model()
 
-st.set_page_config(page_title="태양 흑점 AI 탐지기", layout="centered")
 st.title("🌞 AI가 본 태양")
 st.write(
     "휴대폰으로 촬영한 태양 사진을 업로드하면, AI가 흑점을 찾아주고 개수를 알려줍니다."
