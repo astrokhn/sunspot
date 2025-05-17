@@ -111,21 +111,47 @@ def create_notion_page(
         },
     )
     page_id = page["id"]
-    notion.blocks.children.append(
-        block_id=page_id,
-        children=[
-            {
-                "object": "block",
-                "type": "image",
-                "image": {"type": "external", "external": {"url": orig_img_url}},
-            },
-            {
-                "object": "block",
-                "type": "image",
-                "image": {"type": "external", "external": {"url": result_img_url}},
-            },
-        ],
-    )
+
+    # ✅ 템플릿 내 heading_2 블록 중 키워드 포함된 블록 ID 찾기
+    def find_heading_block_id(keyword):
+        blocks = notion.blocks.children.list(page_id)
+        for block in blocks["results"]:
+            if block["type"] == "heading_2":
+                texts = block["heading_2"].get("rich_text", [])
+                if texts and keyword in texts[0]["text"]["content"]:
+                    return block["id"]
+        return None
+
+    # 🔍 각 템플릿 제목2 위치 찾기
+    orig_block = find_heading_block_id("🌞 내가 찍은 태양 사진")
+    ai_block = find_heading_block_id("🤖 AI가 분석한 태양 사진")
+
+    # 🖼 원본 이미지 삽입
+    if orig_block:
+        notion.blocks.children.append(
+            block_id=orig_block,
+            children=[
+                {
+                    "object": "block",
+                    "type": "image",
+                    "image": {"type": "external", "external": {"url": orig_img_url}},
+                }
+            ],
+        )
+
+    # 🤖 AI 분석 이미지 삽입
+    if ai_block:
+        notion.blocks.children.append(
+            block_id=ai_block,
+            children=[
+                {
+                    "object": "block",
+                    "type": "image",
+                    "image": {"type": "external", "external": {"url": result_img_url}},
+                }
+            ],
+        )
+
     return page_id
 
 
@@ -179,7 +205,8 @@ if uploaded_file is not None:
 
     auto_city = get_ip_location()
     location = st.text_input(
-        "관측 장소를 입력하세요 (자동 감지됨, 수정 가능)", value=auto_city
+        "관측 장소를 영어로 입력하세요 (자동 감지됨, 수정 가능, 예시: Seoul, Suwon)",
+        value=auto_city,
     )
 
     weather_description, temperature, humidity = get_weather_info(location)
@@ -209,6 +236,7 @@ if uploaded_file is not None:
                 result_url,
             )
             st.success("✅ Notion에 기록이 저장되었습니다.")
-            st.info(f"🔗 페이지 ID: {page_id}")
+            notion_url = f"https://www.notion.so/{page_id.replace('-', '')}"
+            st.markdown(f"🔗 [Notion에서 기록 보기]({notion_url})")
 else:
     st.info("이미지를 업로드하면 흑점 탐지가 시작됩니다.")
