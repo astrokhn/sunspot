@@ -1,0 +1,9 @@
+train: ./data/SunspotsYoloDatasetv2/train/images/ 
+val:  ./data/SunspotsYoloDatasetv2/validation/images/ 
+test: ./data/SunspotsYoloDatasetv2/test/images/ 
+
+# number of classes
+nc: 1
+
+# class names
+names: ["sunspot"]
