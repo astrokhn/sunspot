@@ -177,7 +177,11 @@ if uploaded_file is not None:
     st.subheader("📓 관측 일기 기록")
     user_name = st.text_input("이름을 입력하세요")
 
-    city = get_location()
+    auto_city = get_ip_location()
+    location = st.text_input(
+        "관측 장소를 입력하세요 (자동 감지됨, 수정 가능)", value=auto_city
+    )
+
     weather_description, temperature, humidity = get_weather_info(city)
     emoji = get_weather_emoji(weather_description)
 
@@ -196,7 +200,7 @@ if uploaded_file is not None:
             page_id = create_notion_page(
                 user_name,
                 count,
-                city,
+                location,
                 f"{weather_description} {emoji}",
                 temperature,
                 humidity,
