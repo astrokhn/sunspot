@@ -35,7 +35,7 @@ def upload_image_to_imgur(image_path, client_id):
 
 
 # 사용자 도시 위치 가져오기 (IP 기반)
-def get_location():
+def get_ip_location():
     try:
         response = requests.get("https://ipinfo.io/json")
         data = response.json()
@@ -182,10 +182,10 @@ if uploaded_file is not None:
         "관측 장소를 입력하세요 (자동 감지됨, 수정 가능)", value=auto_city
     )
 
-    weather_description, temperature, humidity = get_weather_info(city)
+    weather_description, temperature, humidity = get_weather_info(location)
     emoji = get_weather_emoji(weather_description)
 
-    st.info(f"📍 현재 위치: {city}")
+    st.info(f"📍 현재 위치: {location}")
     st.info(f"🌤️ 현재 날씨: {weather_description} {emoji}")
     st.info(f"🌡️ 온도: {temperature}°C | 💧 습도: {humidity}%")
 
