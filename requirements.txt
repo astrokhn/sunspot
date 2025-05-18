@@ -1,7 +1,5 @@
-streamlit
+gradio
 torch
-# ultralytics
-notion-client
 Pillow
+notion-client
 requests
-opencv-python-headless==4.7.0.72
