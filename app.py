@@ -7,7 +7,6 @@ st.set_page_config(page_title="태양 흑점 AI 탐지기", layout="centered")
 import torch
 from PIL import Image
 import numpy as np
-import cv2
 import tempfile
 from notion_client import Client
 from datetime import datetime
@@ -182,14 +181,12 @@ if uploaded_file is not None:
     results = model(orig_image)
     results.render()
 
-    # 1. YOLO 결과 이미지 (BGR)
-    bgr_image = results.ims[0]  # numpy.ndarray (BGR)
+    # OpenCV 없이 BGR → RGB 수동 변환
+    bgr = results.ims[0]  # numpy array (BGR)
+    rgb = bgr[..., ::-1]  # BGR to RGB
 
-    # 2. BGR → RGB 변환
-    rgb_image = cv2.cvtColor(bgr_image, cv2.COLOR_BGR2RGB)
-
-    # 3. PIL 이미지로 변환
-    result_img = Image.fromarray(rgb_image)
+    # PIL 이미지로 변환
+    result_img = Image.fromarray(rgb)
 
     # 4. Streamlit에 표시
     st.image(result_img, caption="AI 탐지 결과", use_column_width=True)
