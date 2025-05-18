@@ -2,6 +2,6 @@ streamlit
 torch
 ultralytics
 notion-client
-requests
 Pillow
-# opencv-python-headless ❌ 제거 가능
+requests
+opencv-python-headless==4.7.0.72
