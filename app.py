@@ -38,9 +38,9 @@ def get_ip_location():
     try:
         response = requests.get("https://ipinfo.io/json")
         data = response.json()
-        return data.get("city", "서울")
+        return data.get("city", "Seoul")
     except:
-        return "서울"
+        return "Seoul"
 
 
 # 날씨 정보 가져오기 (OpenWeatherMap API 필요)

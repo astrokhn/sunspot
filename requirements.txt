@@ -1,6 +1,6 @@
 streamlit
 torch
-ultralytics
+# ultralytics
 notion-client
 Pillow
 requests
