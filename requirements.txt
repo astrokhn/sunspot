@@ -4,4 +4,3 @@ torchvision
 Pillow
 opencv-python-headless==4.7.0.72
 notion-client
-ultralytics
