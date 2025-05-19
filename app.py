@@ -1,146 +1,123 @@
-# Gradio + YOLOv5 + Imgur + Notion 통합 앱 (Hugging Face Spaces용)
+# Streamlit 앱: YOLOv5로 태양 흑점 탐지 + 날씨/온도/습도/관측 장소 기록 + + Imgur 이미지 업로드 + Notion 업로드
+
+import streamlit as st
+
+st.set_page_config(page_title="태양 흑점 관측 일지", layout="centered")
 
 import os
-import gradio as gr
-import torch
 from PIL import Image
-import numpy as np
 import tempfile
-import requests
-from datetime import datetime
 from notion_client import Client
-import json
-from dotenv import load_dotenv
-import logging
+from datetime import datetime
+import requests
 
-# Configure logging
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
+# Notion 연동 설정
+# NOTION_API_KEY = st.secrets["notion_api_key"]
+# NOTION_DB_ID = st.secrets["notion_db_id"]
+# notion = Client(auth=NOTION_API_KEY)
 
-# Load environment variables
-load_dotenv()
+# Notion 연동 설정
+notion = Client(auth=st.secrets["notion_api_key"])
+NOTION_DB_ID = st.secrets["notion_db_id"]
+IMGUR_CLIENT_ID = st.secrets["imgur_client_id"]
+WEATHER_API_KEY = st.secrets["weather_api_key"]
 
-# Initialize Notion client
-try:
-    notion = Client(auth=os.getenv("NOTION_TOKEN"))
-    DATABASE_ID = os.getenv("NOTION_DATABASE_ID")
-    if not DATABASE_ID:
-        raise ValueError("NOTION_DATABASE_ID not found in environment variables")
-except Exception as e:
-    logger.error(f"Error initializing Notion client: {str(e)}")
-    gr.Warning(
-        "Failed to initialize Notion client. Please check your environment variables."
+
+# 이미지 → Imgur 업로드
+def upload_image_to_imgur(image_path, client_id):
+    headers = {"Authorization": f"Client-ID {client_id}"}
+    with open(image_path, "rb") as f:
+        data = {"image": f.read()}
+    response = requests.post(
+        "https://api.imgur.com/3/image", headers=headers, files=data
     )
-
-# --- Imgur 설정 ---
-IMGUR_CLIENT_ID = os.environ.get("imgur_client_id")
-
-# --- 날씨 설정 ---
-WEATHER_API_KEY = os.environ.get("weather_api_key")
+    if response.status_code == 200:
+        return response.json()["data"]["link"]
+    else:
+        raise Exception(f"Imgur upload failed: {response.status_code}, {response.text}")
 
 
-# Load YOLOv5 model
-@gr.cache_resource
-def load_model():
-    try:
-        model = torch.hub.load("ultralytics/yolov5", "custom", path="best.pt")
-        return model
-    except Exception as e:
-        logger.error(f"Error loading model: {str(e)}")
-        gr.Warning(
-            "Failed to load the YOLOv5 model. Please check if the model file exists."
-        )
-        return None
-
-
-model = load_model()
-
-
+# 위치 자동 감지
+@st.cache_data
 def get_ip_location():
     try:
-        res = requests.get("https://ipinfo.io/json").json()
-        return res.get("city", "Seoul")
+        response = requests.get("https://ipinfo.io/json")
+        data = response.json()
+        return data.get("city", "Seoul")
     except:
         return "Seoul"
 
 
+# 날씨 정보 가져오기 (OpenWeatherMap API 필요)
 def get_weather_info(city):
+    api_key = st.secrets["weather_api_key"]
+    url = f"http://api.openweathermap.org/data/2.5/weather?q={city}&appid={api_key}&lang=kr&units=metric"
     try:
-        url = f"http://api.openweathermap.org/data/2.5/weather?q={city}&appid={WEATHER_API_KEY}&lang=kr&units=metric"
-        res = requests.get(url).json()
-        weather = res["weather"][0]["description"]
-        temp = res["main"]["temp"]
-        hum = res["main"]["humidity"]
-        return weather, temp, hum
+        response = requests.get(url)
+        data = response.json()
+        weather_description = data["weather"][0]["description"]
+        temperature = data["main"]["temp"]
+        humidity = data["main"]["humidity"]
+        return weather_description, temperature, humidity
     except:
         return "알 수 없음", 0, 0
 
 
-def get_weather_emoji(desc):
-    if "맑" in desc:
+# 날씨 설명에 따른 이모지 제공
+def get_weather_emoji(description):
+    if "맑" in description:
         return "☀️"
-    if "구름" in desc:
+    elif "구름" in description:
         return "☁️"
-    if "비" in desc:
+    elif "비" in description:
         return "🌧️"
-    if "눈" in desc:
+    elif "눈" in description:
         return "❄️"
-    return "🌈"
+    elif "안개" in description:
+        return "🌫️"
+    else:
+        return "🌈"
 
 
-def upload_to_imgur(image: Image.Image) -> str:
-    with tempfile.NamedTemporaryFile(suffix=".jpg", delete=False) as tmp:
-        image.save(tmp.name, format="JPEG")
-        with open(tmp.name, "rb") as f:
-            headers = {"Authorization": f"Client-ID {IMGUR_CLIENT_ID}"}
-            data = {"image": f.read()}
-            res = requests.post(
-                "https://api.imgur.com/3/image", headers=headers, files=data
-            )
-            return res.json()["data"]["link"]
+# 이미지 파일을 Imgur에 업로드 후 URL 반환
+# def upload_image_to_notion(image: Image.Image, name: str) -> str:
+#    buffer = tempfile.NamedTemporaryFile(suffix=".jpg", delete=False)
+#    image.save(buffer.name, format="JPEG")
+#    client_id = st.secrets["imgur_client_id"]
+#    imgur_url = upload_image_to_imgur(buffer.name, client_id)
+#    return imgur_url
 
 
 def create_notion_page(
-    user, count, location, weather, temp, hum, memo, orig_url, result_url
+    user_name, location, weather, temperature, humidity, memo, orig_img_url
 ):
     today = datetime.today().strftime("%Y-%m-%d")
     page = notion.pages.create(
-        parent={"database_id": DATABASE_ID},
+        parent={"database_id": NOTION_DB_ID},
         properties={
-            "Name": {"title": [{"text": {"content": f"Sunspot Observation - {user}"}}]},
-            "Date": {"date": {"start": today}},
-            "Location": {"rich_text": [{"text": {"content": location}}]},
-            "Weather": {
-                "rich_text": [
-                    {
-                        "text": {
-                            "content": json.dumps(
-                                {
-                                    "description": weather,
-                                    "temperature": temp,
-                                    "humidity": hum,
-                                }
-                            )
-                        }
-                    }
-                ]
-            },
+            "이름": {"title": [{"text": {"content": user_name}}]},
+            "관측 날짜": {"date": {"start": today}},
+            "관측 장소": {"rich_text": [{"text": {"content": location}}]},
+            "날씨": {"rich_text": [{"text": {"content": weather}}]},
+            "온도(℃)": {"number": temperature},
+            "습도(%)": {"number": humidity},
+            "관측 메모": {"rich_text": [{"text": {"content": memo}}]},
+            "사진 URL": {"url": orig_img_url},  # 데이터베이스 칼럼에 이미지 URL 추가
         },
     )
     page_id = page["id"]
 
-    def find_block(keyword):
+    # 템플릿 제목2 블록에 이미지 삽입
+    def find_heading_block_id(keyword):
         blocks = notion.blocks.children.list(page_id)
         for block in blocks["results"]:
             if block["type"] == "heading_2":
-                txt = block["heading_2"].get("rich_text", [])
-                if txt and keyword in txt[0]["text"]["content"]:
+                texts = block["heading_2"].get("rich_text", [])
+                if texts and keyword in texts[0]["text"]["content"]:
                     return block["id"]
         return None
 
-    orig_block = find_block("🌞 내가 찍은 태양 사진")
-    ai_block = find_block("🤖 AI가 분석한 태양 사진")
-
+    orig_block = find_heading_block_id("🌞 내가 찍은 태양 사진")
     if orig_block:
         notion.blocks.children.append(
             block_id=orig_block,
@@ -148,64 +125,59 @@ def create_notion_page(
                 {
                     "object": "block",
                     "type": "image",
-                    "image": {"type": "external", "external": {"url": orig_url}},
-                }
-            ],
-        )
-    if ai_block:
-        notion.blocks.children.append(
-            block_id=ai_block,
-            children=[
-                {
-                    "object": "block",
-                    "type": "image",
-                    "image": {"type": "external", "external": {"url": result_url}},
+                    "image": {"type": "external", "external": {"url": orig_img_url}},
                 }
             ],
         )
 
-    return f"https://www.notion.so/{page_id.replace('-', '')}"
+    return page_id
 
 
-def app_fn(image, name, memo, location):
-    results = model(image)
-    results.render()
-    bgr = results.ims[0]
-    rgb = bgr[..., ::-1]
-    result_img = Image.fromarray(rgb)
-    count = len(results.pandas().xyxy[0])
+# UI 시작
+st.title("🌞 태양 관측 기록기")
+st.write("태양 사진과 관측 정보를 기록하고 Notion에 자동 저장할 수 있어요.")
 
-    city = location or get_ip_location()
-    weather_desc, temp, hum = get_weather_info(city)
-    emoji = get_weather_emoji(weather_desc)
-    weather = f"{weather_desc} {emoji}"
+uploaded_file = st.file_uploader(
+    "태양 이미지를 업로드하세요", type=["jpg", "jpeg", "png"]
+)
+if uploaded_file:
+    with tempfile.NamedTemporaryFile(delete=False, suffix=".jpg") as tmp:
+        tmp.write(uploaded_file.read())
+        tmp_path = tmp.name
 
-    orig_url = upload_to_imgur(image)
-    result_url = upload_to_imgur(result_img)
+    image = Image.open(tmp_path).convert("RGB")
+    st.image(image, caption="업로드한 이미지", use_column_width=True)
 
-    notion_link = create_notion_page(
-        name, count, city, weather, temp, hum, memo, orig_url, result_url
+    user_name = st.text_input("이름을 입력하세요")
+    auto_city = get_ip_location()
+    location = st.text_input(
+        "관측 장소를 영어로 입력하세요 (자동 감지됨, 수정 가능, 예시: Seoul, Suwon)",
+        value=auto_city,
     )
 
-    label = f"✅ 흑점 {count}개 탐지됨 | 기록 저장 완료"
-    return result_img, label, notion_link
+    weather_description, temperature, humidity = get_weather_info(location)
+    emoji = get_weather_emoji(weather_description)
 
+    st.info(f"📍 현재 위치: {location}")
+    st.info(f"🌤️ 날씨: {weather_description} {emoji}")
+    st.info(f"🌡️ 온도: {temperature}°C | 💧 습도: {humidity}%")
 
-app = gr.Interface(
-    fn=app_fn,
-    inputs=[
-        gr.Image(type="pil", label="태양 이미지 업로드"),
-        gr.Text(label="이름"),
-        gr.Textbox(label="관측 메모"),
-        gr.Text(label="관측 도시 (선택)", placeholder="기본은 자동 감지"),
-    ],
-    outputs=[
-        gr.Image(type="pil", label="AI 분석 결과"),
-        gr.Label(label="탐지 결과"),
-        gr.Textbox(label="🔗 Notion 링크"),
-    ],
-    title="🌞 태양 흑점 탐지 + Notion 기록기",
-    description="YOLOv5로 태양 흑점을 분석하고 결과를 Notion 템플릿에 자동 기록합니다.",
-)
+    memo = st.text_area("오늘의 태양 관측 메모를 남겨보세요:")
 
-app.launch()
+    if st.button("Notion에 기록 저장"):
+        if user_name.strip() == "":
+            st.warning("이름을 입력해주세요.")
+        else:
+            imgur_url = upload_image_to_imgur(tmp_path, IMGUR_CLIENT_ID)
+            page_id = create_notion_page(
+                user_name,
+                location,
+                f"{weather_description} {emoji}",
+                temperature,
+                humidity,
+                memo,
+                imgur_url,
+            )
+            notion_url = f"https://www.notion.so/{page_id.replace('-', '')}"
+            st.success("✅ Notion에 기록이 저장되었습니다.")
+            st.markdown(f"🔗 [기록 보기]({notion_url})")
